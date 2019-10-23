@@ -27,8 +27,8 @@
 #include <stdint.h>
 
 // Where is the hardware?
-#define IN_PIN_MASK _BV(5)
-#define OUT_PIN_MASK _BV(4)
+#define IN_PIN_MASK _BV(4)
+#define OUT_PIN_MASK _BV(3)
 
 // about a second
 #define DEBOUNCE_TICKS (1000UL)
