@@ -25,6 +25,9 @@ import time
 import subprocess
 import os
 import random
+import syslog
+
+syslog.openlog(facility=syslog.LOG_DAEMON)
 
 # define this as the GPIO pin you're using as the power-cycle signal.
 # This pin will go from high impedance to low for 2 seconds, and then
@@ -50,15 +53,15 @@ while True:
 	for host in hosts:
 		res = subprocess.call(["ping", "-c", "3", "-W", "5", host], stdout=FNULL, stderr=FNULL)
 		if (res == 0):
-			print(host + " is up.")
+			syslog.syslog(syslog.LOG_DEBUG, host + " is up.")
 			sys.exit(0) # it worked. Bail
 		else:
-			print(host + " is down.")
+			syslog.syslog(syslog.LOG_WARN, host + " is down.")
 	if time.time() - start > 60*60:
 		break
 	time.sleep(5 * 60) # wait 5 minutes
 
-print "All hosts unreachable for 60 minutes - resetting router"
+syslog.syslog(syslog.LOG_CRIT, "All hosts unreachable for 60 minutes - resetting router")
 
 # Perform the reset operation
 GPIO.setmode(GPIO.BCM)
