@@ -33,8 +33,8 @@
 // about a second
 #define DEBOUNCE_TICKS (1000UL)
 
-// about 2 seconds
-#define RESET_TICKS (2000UL)
+// about 10 seconds
+#define RESET_TICKS (10000UL)
 
 // about an hour
 #define RESET_HOLDOFF (3600UL * 1000)
