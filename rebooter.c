@@ -39,13 +39,18 @@
 // about an hour
 #define RESET_HOLDOFF (3600UL * 1000)
 
+// Tick counter. This is not allowed to equal zero, so we can
+// use zero as an "inactive" value.
 volatile uint64_t ticks_cnt;
+
+// State for the input debouncer
 uint64_t debounce_start;
 uint8_t last_input;
 uint8_t official_state; // this is the "official" state of the input bit
 
-uint64_t reset_holdoff; // waiting after a reset for the input to be idle for an hour
-uint64_t reset_start; // the beginning of the reset pulse
+// Event timers
+uint64_t reset_holdoff; // waiting after a reset for the input to be idle for the holdoff period
+uint64_t reset_start; // waiting for the end of the reset pulse
 
 ISR(TIMER0_COMPA_vect) {
   if (++ticks_cnt == 0) ticks_cnt++; // increment it, and disallow 0
@@ -62,12 +67,15 @@ unsigned long inline __attribute__ ((always_inline)) ticks() {
 static uint8_t read_input() {
   uint64_t now = ticks();
   uint8_t state = PINB & IN_PIN_MASK;
+  // If the state has changed, then (re)start the debounce
   if (state != last_input) {
     last_input = state;
     debounce_start = now;
     return official_state;
   }
+  // state has not changed.
   if (debounce_start == 0) return official_state; // we're not debouncing
+  // If the debounce is now over, then change the state and cancel debounce
   if (now - debounce_start >= DEBOUNCE_TICKS) {
     debounce_start = 0;
     official_state = state;
@@ -106,6 +114,7 @@ void __ATTR_NORETURN__ main() {
     wdt_reset(); // pet the dog
     uint64_t now = ticks();
 
+    // If we're resetting the device now, check for the end of it
     if (reset_start != 0 && (now - reset_start >= RESET_TICKS)) {
       PORTB &= ~OUT_PIN_MASK; // deassert
       reset_start = 0;
@@ -113,14 +122,18 @@ void __ATTR_NORETURN__ main() {
 
     if (read_input()) {
       // input is idle.
+      // If we're in the holdoff period, check for the end of it
       if (reset_holdoff != 0 && (now - reset_holdoff >= RESET_HOLDOFF))
         reset_holdoff = 0; // we're done with the hold-off.
     } else {
       // input is asserted
+      // If we're in the holdoff period, then start it over
       if (reset_holdoff != 0) {
         reset_holdoff = now; // restart the holdoff interval
         continue;
       }
+      // Start the reset. First, begin the holdoff and the reset pulse
+      // intervals.
       reset_holdoff = now;
       reset_start = now;
       PORTB |= OUT_PIN_MASK; // begin the reset pulse.
