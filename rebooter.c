@@ -93,8 +93,8 @@ void __ATTR_NORETURN__ main() {
 
   // set up timer 0 to be a millisecond timer.
   TCCR0A = _BV(WGM01); // CTC mode
-  TCCR0B = _BV(CS02); // divide by 256, nothing else special
-  OCR0A = 30; // 8 MHz divided by 256 divided by 31 is a touch more than 1 kHz.
+  TCCR0B = _BV(CS01) | _BV(CS00); // divide by 64, nothing else special
+  OCR0A = 15; // 1 MHz divided by 64 divided by 16 is a touch less than 1 kHz.
   TIMSK = _BV(OCIE0A); // interrupt on compare match
 
   wdt_enable(WDTO_1S);
