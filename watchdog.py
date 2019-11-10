@@ -44,6 +44,7 @@ reset_pin = 4
 hosts = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "8.26.56.26", "8.20.247.20", "9.9.9.9", "149.112.112.112", "64.6.64.6", "64.6.65.6"]
 
 # do some load balancing
+random.seed()
 random.shuffle(hosts)
 
 FNULL = open(os.devnull)
