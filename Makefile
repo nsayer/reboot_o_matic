@@ -33,5 +33,5 @@ fuse:
 flash: rebooter.hex
 	$(AVRDUDE) $(DUDE_OPTS) -U flash:w:$^
 
-init: fuse flash seed
+init: fuse flash
 
