@@ -46,7 +46,6 @@ volatile uint64_t ticks_cnt;
 // State for the input debouncer
 uint64_t debounce_start;
 uint8_t last_input;
-uint8_t official_state; // this is the "official" state of the input bit
 
 // Event timers
 uint64_t reset_holdoff; // waiting after a reset for the input to be idle for the holdoff period
@@ -66,21 +65,23 @@ unsigned long inline __attribute__ ((always_inline)) ticks() {
 
 static uint8_t read_input() {
   uint64_t now = ticks();
-  uint8_t state = PINB & IN_PIN_MASK;
+  uint8_t state = (PINB & IN_PIN_MASK) == 0;
   // If the state has changed, then (re)start the debounce
   if (state != last_input) {
     last_input = state;
     debounce_start = now;
-    return official_state;
+    return 0;
+  } else {
+    // state has not changed.
+    if (debounce_start == 0) return 0; // we're not debouncing
+    // If the debounce is now over, then change the state and cancel debounce
+    if (now - debounce_start >= DEBOUNCE_TICKS) {
+      debounce_start = 0;
+      return state; // We just changed the state. Return it.
+    }
+    return 0;
   }
-  // state has not changed.
-  if (debounce_start == 0) return official_state; // we're not debouncing
-  // If the debounce is now over, then change the state and cancel debounce
-  if (now - debounce_start >= DEBOUNCE_TICKS) {
-    debounce_start = 0;
-    official_state = state;
-  }
-  return official_state;
+  __builtin_unreachable();
 }
 
 void __ATTR_NORETURN__ main() {
@@ -105,9 +106,13 @@ void __ATTR_NORETURN__ main() {
   OCR0A = 15; // 1 MHz divided by 64 divided by 16 is a touch less than 1 kHz.
   TIMSK = _BV(OCIE0A); // interrupt on compare match
 
+  last_input = 0;
+  debounce_start = 0;
+  reset_holdoff = 0;
+  reset_start = 0;
+
   wdt_enable(WDTO_1S);
 
-  official_state = 1; // start with the input NOT asserted
   sei(); // release the hounds!
 
   while(1) {
@@ -120,16 +125,15 @@ void __ATTR_NORETURN__ main() {
       reset_start = 0;
     }
 
-    if (read_input()) {
+    if (!read_input()) {
       // input is idle.
       // If we're in the holdoff period, check for the end of it
       if (reset_holdoff != 0 && (now - reset_holdoff >= RESET_HOLDOFF))
         reset_holdoff = 0; // we're done with the hold-off.
     } else {
       // input is asserted
-      // If we're in the holdoff period, then start it over
+      // If we're in the holdoff period, ignore it
       if (reset_holdoff != 0) {
-        reset_holdoff = now; // restart the holdoff interval
         continue;
       }
       // Start the reset. First, begin the holdoff and the reset pulse
@@ -139,6 +143,6 @@ void __ATTR_NORETURN__ main() {
       PORTB |= OUT_PIN_MASK; // begin the reset pulse.
     }
   }
-
+  __builtin_unreachable();
 }
 
