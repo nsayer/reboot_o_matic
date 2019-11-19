@@ -30,6 +30,13 @@
 #define IN_PIN_MASK _BV(4)
 #define OUT_PIN_MASK _BV(3)
 
+// We want a 1 ms basic tick, but we're dividing 1 MHz by 64 for the timer
+// clock. So one tick is 15 5/8 timer clocks. So we count 16 5 times
+// and 15 3 times and repeat
+#define TICK_BASE (15)
+#define TICK_NUMERATOR (5)
+#define TICK_DENOMINATOR (8)
+
 // about a second
 #define DEBOUNCE_TICKS (1000UL)
 
@@ -41,22 +48,28 @@
 
 // Tick counter. This is not allowed to equal zero, so we can
 // use zero as an "inactive" value.
-volatile uint64_t ticks_cnt;
-
-// State for the input debouncer
-uint64_t debounce_start;
-uint8_t last_input;
+volatile uint32_t ticks_cnt;
 
 // Event timers
-uint64_t reset_holdoff; // waiting after a reset for the input to be idle for the holdoff period
-uint64_t reset_start; // waiting for the end of the reset pulse
+uint32_t reset_holdoff; // waiting after a reset for the input to be idle for the holdoff period
+uint32_t reset_start; // waiting for the end of the reset pulse
 
 ISR(TIMER0_COMPA_vect) {
+  static uint8_t cycle_pos = 0;
+  // First, set up the timer for the next cycle length.
+  if (++cycle_pos >= TICK_DENOMINATOR) cycle_pos = 0;
+  // Note that the OCR0A register must be loaded with a value 1 *less*
+  // than the actual number of timer clocks you want to count.
+  if (cycle_pos >= TICK_NUMERATOR)
+    OCR0A = TICK_BASE - 1; // short cycle
+  else
+    OCR0A = TICK_BASE; // long cycle
+
   if (++ticks_cnt == 0) ticks_cnt++; // increment it, and disallow 0
 }
 
-unsigned long inline __attribute__ ((always_inline)) ticks() {
-  unsigned long out;
+static uint32_t inline __attribute__ ((always_inline)) ticks() {
+  uint32_t out;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     out = ticks_cnt;
   }
@@ -64,7 +77,11 @@ unsigned long inline __attribute__ ((always_inline)) ticks() {
 }
 
 static uint8_t read_input() {
-  uint64_t now = ticks();
+  // State for the input debouncer
+  static uint32_t debounce_start = 0;
+  static uint8_t last_input = 0;
+
+  uint32_t now = ticks();
   uint8_t state = (PINB & IN_PIN_MASK) == 0;
   // If the state has changed, then (re)start the debounce
   if (state != last_input) {
@@ -103,11 +120,9 @@ void __ATTR_NORETURN__ main() {
   // set up timer 0 to be a millisecond timer.
   TCCR0A = _BV(WGM01); // CTC mode
   TCCR0B = _BV(CS01) | _BV(CS00); // divide by 64, nothing else special
-  OCR0A = 15; // 1 MHz divided by 64 divided by 16 is a touch less than 1 kHz.
+  OCR0A = TICK_BASE; // Start with a long cycle
   TIMSK = _BV(OCIE0A); // interrupt on compare match
 
-  last_input = 0;
-  debounce_start = 0;
   reset_holdoff = 0;
   reset_start = 0;
 
@@ -117,7 +132,7 @@ void __ATTR_NORETURN__ main() {
 
   while(1) {
     wdt_reset(); // pet the dog
-    uint64_t now = ticks();
+    uint32_t now = ticks();
 
     // If we're resetting the device now, check for the end of it
     if (reset_start != 0 && (now - reset_start >= RESET_TICKS)) {
