@@ -57,7 +57,7 @@ while True:
 			syslog.syslog(syslog.LOG_DEBUG, host + " is up.")
 			sys.exit(0) # it worked. Bail
 		else:
-			syslog.syslog(syslog.LOG_WARN, host + " is down.")
+			syslog.syslog(syslog.LOG_WARNING, host + " is down.")
 	if time.time() - start > 60*60:
 		break
 	time.sleep(5 * 60) # wait 5 minutes
