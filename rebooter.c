@@ -37,17 +37,24 @@
 #define TICK_NUMERATOR (5)
 #define TICK_DENOMINATOR (8)
 
+// This is how long the input has to stay at a particular
+// state for a change to be recognized.
 // about a second
 #define DEBOUNCE_TICKS (1000UL)
 
+// This is how long the power is turned off when the input is asserted
 // about 10 seconds
 #define RESET_TICKS (10000UL)
 
+// This is how long subsequente reset pulses will be ignored after one is
+// recognized and the power is cycled.
 // about an hour
 #define RESET_HOLDOFF (3600UL * 1000)
 
 // Tick counter. This is not allowed to equal zero, so we can
-// use zero as an "inactive" value.
+// use zero as an "inactive" value. It will roll over after 49.7 days.
+// Intervals calculated across the zero-cross will be 1 tick too short
+// because we skip over 0. But for this application, that's not significant.
 volatile uint32_t ticks_cnt;
 
 // Event timers
@@ -75,6 +82,10 @@ static uint32_t inline __attribute__ ((always_inline)) ticks() {
   return out;
 }
 
+// Read and de-bounce the input. Any positive pulse must last longer
+// than DEBOUNCE_TICKS and will result in only one return from this
+// method being 1. In order for another pulse to be recognized,
+// the input must return low again for DEBOUNCE_TICKS.
 static uint8_t read_input() {
   // State for the input debouncer
   static uint32_t debounce_start = 0;
@@ -86,7 +97,6 @@ static uint8_t read_input() {
   if (state != last_input) {
     last_input = state;
     debounce_start = now;
-    return 0;
   } else {
     // state has not changed.
     if (debounce_start == 0) return 0; // we're not debouncing
@@ -95,9 +105,8 @@ static uint8_t read_input() {
       debounce_start = 0;
       return state; // We just changed the state. Return it.
     }
-    return 0;
   }
-  __builtin_unreachable();
+  return 0;
 }
 
 void __ATTR_NORETURN__ main() {
