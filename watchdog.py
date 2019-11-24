@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # Reboot-o-matic
 # Copyright 2019 Nicholas W. Sayer
