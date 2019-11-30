@@ -29,6 +29,13 @@ import syslog
 
 syslog.openlog(facility=syslog.LOG_DAEMON)
 
+# define this as how long (in minutes) you want to keep trying before
+# deciding to reboot the router. WARNING: This should be longer than
+# a firmware update should take. Power-cycling the router while it's
+# writing firmware would probably be a disaster.
+#
+timeout = 30 # a half hour
+
 # define this as the GPIO pin you're using as the power-cycle signal.
 # This pin will go from high impedance to low for 2 seconds, and then
 # released (so it's an open-drain output).
@@ -40,7 +47,7 @@ reset_pin = 4
 # of them to use them like this, but in my defense, answering a ping
 # is less resource-intensive than a DNS query, and this script is designed
 # to be extremely gentle.
-
+#
 hosts = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "8.26.56.26", "8.20.247.20", "9.9.9.9", "149.112.112.112", "64.6.64.6", "64.6.65.6"]
 
 # do some load balancing
@@ -58,11 +65,11 @@ while True:
 			sys.exit(0) # it worked. Bail
 		else:
 			syslog.syslog(syslog.LOG_WARNING, host + " is down.")
-	if time.time() - start > 60*60:
+	if (time.time() - start) > (timeout * 60):
 		break
 	time.sleep(5 * 60) # wait 5 minutes
 
-syslog.syslog(syslog.LOG_CRIT, "All hosts unreachable for 60 minutes - resetting router")
+syslog.syslog(syslog.LOG_CRIT, "All hosts unreachable for " + str(timeout) + " minutes - resetting router")
 
 # Perform the reset operation
 GPIO.setmode(GPIO.BCM)
