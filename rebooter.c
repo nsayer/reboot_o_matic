@@ -153,6 +153,13 @@ void __ATTR_NORETURN__ main() {
       // input is asserted
       // If we're in the holdoff period, ignore it
       if (reset_start != 0) {
+	// Prevent the holdoff period from expiring by dragging the start
+	// forward. When we do go high, we don't want to get stuck because
+	// of window arithmetic
+	if (now - reset_start >= RESET_HOLDOFF) {
+		reset_start = now - RESET_HOLDOFF; // slide forward
+		if (reset_start == 0) reset_start++; // it can't be zero.
+	}
         continue;
       }
       // Start the reset. First, begin the holdoff and the reset pulse
