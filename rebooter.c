@@ -18,6 +18,8 @@
  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#define F_CPU (1000000UL)
+
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <avr/power.h>
@@ -26,56 +28,66 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// 1 MHz / 8 is 125,000. To get a 1/10th sec timer out of that,
+// divide that by 1000, which is 12,500. But subtract one because it's
+// zero based and inclusive.
+
+#define BASE (12500 - 1)
+// If we ever need fractional counting, this allows for it.
+#define CYCLE_COUNT (0)
+#define LONG_CYCLES (0)
+
 // Where is the hardware?
+#if defined (__AVR_ATtiny25__) | defined(__AVR_ATtiny45__) | defined (__AVR_ATtiny85__)
 #define IN_PIN_MASK _BV(4)
 #define OUT_PIN_MASK _BV(3)
-
-// We want a 1 ms basic tick, but we're dividing 1 MHz by 64 for the timer
-// clock. So one tick is 15 5/8 timer clocks. So we count 16 5 times
-// and 15 3 times and repeat
-#define TICK_BASE (15)
-#define TICK_NUMERATOR (5)
-#define TICK_DENOMINATOR (8)
+#else
+#define IN_PIN_MASK _BV(0)
+#define OUT_PIN_MASK _BV(2)
+#endif
 
 // This is how long the input has to stay at a particular
 // state for a change to be recognized.
 // about a second
-#define DEBOUNCE_TICKS (1000UL)
+#define DEBOUNCE_TICKS (10U)
 
 // This is how long the power is turned off when the input is asserted
 // about 10 seconds
-#define RESET_TICKS (10000UL)
+#define RESET_TICKS (100U)
 
 // This is how long subsequente reset pulses will be ignored after one is
 // recognized and the power is cycled.
 // about an hour
-#define RESET_HOLDOFF (3600UL * 1000)
+#define RESET_HOLDOFF (3600U * 10)
 
 // Tick counter. This is not allowed to equal zero, so we can
-// use zero as an "inactive" value. It will roll over after 49.7 days.
+// use zero as an "inactive" value. It will roll over after 1.8 hours.
 // Intervals calculated across the zero-cross will be 1 tick too short
 // because we skip over 0. But for this application, that's not significant.
-volatile uint32_t ticks_cnt;
+volatile uint16_t ticks_cnt;
 
 // Event timers
-uint32_t reset_start; // waiting for the end of the reset pulse
+uint16_t reset_start; // waiting for the end of the reset pulse
 
+#if defined (__AVR_ATtiny25__) | defined(__AVR_ATtiny45__) | defined (__AVR_ATtiny85__)
 ISR(TIMER0_COMPA_vect) {
-  static uint8_t cycle_pos = 0;
-  // First, set up the timer for the next cycle length.
-  if (++cycle_pos >= TICK_DENOMINATOR) cycle_pos = 0;
-  // Note that the OCR0A register must be loaded with a value 1 *less*
-  // than the actual number of timer clocks you want to count.
-  if (cycle_pos >= TICK_NUMERATOR)
-    OCR0A = TICK_BASE - 1; // short cycle
-  else
-    OCR0A = TICK_BASE; // long cycle
-
-  if (++ticks_cnt == 0) ticks_cnt++; // increment it, and disallow 0
+#else
+ISR(TIM0_COMPA_vect) {
+#endif
+        if (++ticks_cnt == 0) ticks_cnt++; // it can't be zero
+#if (CYCLE_COUNT > 0)
+        static unsigned int cycle_pos;
+        if (cycle_pos++ >= LONG_CYCLES) {
+                OCR0A = BASE;
+        } else {
+                OCR0A = BASE + 1;
+        }
+        if (cycle_pos == CYCLE_COUNT) cycle_pos = 0;
+#endif
 }
 
-static uint32_t inline __attribute__ ((always_inline)) ticks() {
-  uint32_t out;
+static uint16_t inline __attribute__ ((always_inline)) ticks() {
+  uint16_t out;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     out = ticks_cnt;
   }
@@ -86,12 +98,12 @@ static uint32_t inline __attribute__ ((always_inline)) ticks() {
 // than DEBOUNCE_TICKS and will result in only one return from this
 // method being 1. In order for another pulse to be recognized,
 // the input must return low again for DEBOUNCE_TICKS.
-static uint8_t read_input() {
+static inline __attribute__ ((always_inline)) uint8_t read_input() {
   // State for the input debouncer
-  static uint32_t debounce_start = 0;
+  static uint16_t debounce_start = 0;
   static uint8_t last_input = 0;
 
-  uint32_t now = ticks();
+  uint16_t now = ticks();
   uint8_t state = (PINB & IN_PIN_MASK) == 0;
   // If the state has changed, then (re)start the debounce
   if (state != last_input) {
@@ -111,33 +123,50 @@ static uint8_t read_input() {
 
 void __ATTR_NORETURN__ main() {
 
-  ADCSRA = 0; // DIE, ADC!!! DIE!!!
-  ACSR = _BV(ACD); // Turn off analog comparator - but was it ever on anyway?
+  wdt_enable(WDTO_500MS);
+
+  ACSR = _BV(ACD); // Turn off analog comparator
   power_adc_disable();
+#if defined (__AVR_ATtiny25__) | defined(__AVR_ATtiny45__) | defined (__AVR_ATtiny85__)
   power_usi_disable();
   power_timer1_disable();
+#endif
 
   // set up the output pin - set it low, but everything else high
   // (for pull-ups to reduce power on unconnected pins)
+#if defined (__AVR_ATtiny25__) | defined(__AVR_ATtiny45__) | defined (__AVR_ATtiny85__)
   PORTB = ~OUT_PIN_MASK;
+#else
+  // tiny9 uses a pull-up register
+  PORTB = 0;
+  PUEB = ~OUT_PIN_MASK;
+#endif
   // Output pin is output, everything else is input.
   DDRB = OUT_PIN_MASK;
 
-  // set up timer 0 to be a millisecond timer.
+  // set up timer 0 to be a tick timer.
+#if defined (__AVR_ATtiny25__) | defined(__AVR_ATtiny45__) | defined (__AVR_ATtiny85__)
   TCCR0A = _BV(WGM01); // CTC mode
-  TCCR0B = _BV(CS01) | _BV(CS00); // divide by 64, nothing else special
-  OCR0A = TICK_BASE; // Start with a long cycle
+  TCCR0B = _BV(CS01); // divide by 8, nothing else special
   TIMSK = _BV(OCIE0A); // interrupt on compare match
+#else
+  TCCR0A = 0;
+  TCCR0B = _BV(WGM02) | _BV(CS01); // prescale by 8, CTC mode
+  TIMSK0 = _BV(OCIE0A); // OCR0A interrupt only.
+#endif
+#if (CYCLE_COUNT > 0)
+        OCR0A = BASE + 1; // long cycle
+#else
+        OCR0A = BASE; // short cycle
+#endif
 
   reset_start = 0;
-
-  wdt_enable(WDTO_1S);
 
   sei(); // release the hounds!
 
   while(1) {
     wdt_reset(); // pet the dog
-    uint32_t now = ticks();
+    uint16_t now = ticks();
 
     // If we're resetting the device now, check for the end of the reset pulse
     if (reset_start != 0 && (now - reset_start >= RESET_TICKS) && (PORTB & OUT_PIN_MASK)) {
