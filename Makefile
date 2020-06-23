@@ -12,7 +12,7 @@ CC = avr-gcc
 OBJCPY = avr-objcopy
 AVRDUDE = avrdude
 
-CFLAGS = -Os -g -mmcu=$(CHIP) -std=c99 $(OPTS) -Wall -Wno-main -fno-tree-switch-conversion
+CFLAGS = -Os -g -mmcu=$(CHIP) -std=c11 -Wall -Wno-main -fno-tree-switch-conversion
 
 DUDE_OPTS = -c $(PROG) -p $(CHIP)
 
