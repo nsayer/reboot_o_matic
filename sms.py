@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import serial
-import io
 import csv
 import RPi.GPIO as GPIO
 import time
@@ -10,7 +9,6 @@ import syslog
 ser = serial.Serial('/dev/ttyUSB2')
 # Use this for debugging
 #ser = serial.serial_for_url('spy:///dev/ttyUSB2')
-sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
 
 syslog.openlog(facility=syslog.LOG_DAEMON)
 
@@ -20,8 +18,8 @@ reset_pin = 4
 
 def doCommand(command):
 	ser.flushInput()
-	sio.write(unicode(command + "\r"))
-	sio.flush()
+	ser.write(command + "\r")
+	ser.flush()
 	out = []
 	while True:
 		out.append(ser.readline().rstrip())
@@ -36,12 +34,12 @@ def deleteSMS(record):
 
 def sendSMS(recipient, text):
 	ser.flushInput()
-	sio.write(unicode("AT+CMGS=\"" + recipient + "\"\r"))
-	sio.flush()
-	sio.write(unicode(text + "\r"))
-	sio.flush()
-	sio.write(unicode("\x1a"))
-	sio.flush()
+	ser.write("AT+CMGS=\"" + recipient + "\"\r")
+	ser.flush()
+	ser.write(text + "\r")
+	ser.flush()
+	ser.write("\x1a")
+	ser.flush()
 	while True:
 		line = ser.readline().rstrip()
 		if (line.startswith("ERROR")):	
@@ -56,9 +54,8 @@ def pollSMS():
 	for i in range(0, len(result)/2):
 		infoLine = result[2 * i]
 		textLine = result[2 * i + 1]
-		# Why does this comparison fail?
-		#if (not infoLine.startswith("+CGML:")):
-		#	raise Exception("Unexpected CGML response line")
+		if (not infoLine.startswith("+CMGL:")):
+			raise Exception("Unexpected CMGL response line: " + infoLine)
 		infoLine = infoLine[7:]
 		infos = csv.reader([infoLine], delimiter=',', quotechar='"').next()
 		out.append({'id':int(infos[0]), 'status':infos[1], 'sender':infos[2], 'time':infos[4], 'text':textLine})
