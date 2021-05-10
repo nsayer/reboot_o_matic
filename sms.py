@@ -22,12 +22,13 @@ def doCommand(command):
 	ser.flush()
 	out = []
 	while True:
-		out.append(ser.readline().rstrip())
-		if (out[-1].startswith("ERROR")):
+		line = ser.readline().rstrip()
+		if (line.startswith("ERROR")):
 			raise Exception("command returned error")
-		if (out[-1].startswith("OK")):
+		if (line.startswith("OK")):
 			break
-	return out
+		out.append(line)
+	return out[1:] # Skip over the echo of the command
 
 def deleteSMS(record):
 	doCommand("AT+CMGD=" + str(record))
@@ -49,7 +50,6 @@ def sendSMS(recipient, text):
 
 def pollSMS():
 	result = doCommand("AT+CMGL=\"ALL\"")
-	result = result[1:-1] # remove the echo and the OK
 	out = []
 	for i in range(0, len(result)/2):
 		infoLine = result[2 * i]
@@ -70,18 +70,18 @@ def doReboot():
 	
 while True:
 	texts = pollSMS()
-
 	for text in texts:
 		syslog.syslog(syslog.LOG_INFO, "Received message from " + text['sender'] + ": " + text['text'])
 		deleteSMS(text['id'])
 		msg = text['text']
 		if (not msg.startswith("!")):
 			continue
-		sendSMS(text['sender'], msg)
 		msg = msg[1:]
 		if (msg == 'STATUS'):
 			sendSMS(text['sender'], "Ready.")
-		if (msg == 'REBOOT'):
+		elif (msg == 'REBOOT'):
 			doReboot()
 			sendSMS(text['sender'], "Reboot performed.")
+		else:
+			sendSMS(text['sender'], "unk: " + msg)
 	time.sleep(15)
