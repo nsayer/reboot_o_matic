@@ -74,15 +74,15 @@ ISR(TIMER0_COMPA_vect) {
 #else
 ISR(TIM0_COMPA_vect) {
 #endif
-        if (++ticks_cnt == 0) ticks_cnt++; // it can't be zero
+  if (++ticks_cnt == 0) ticks_cnt++; // it can't be zero
 #if (CYCLE_COUNT > 0)
-        static unsigned int cycle_pos;
-        if (cycle_pos++ >= LONG_CYCLES) {
-                OCR0A = BASE;
-        } else {
-                OCR0A = BASE + 1;
-        }
-        if (cycle_pos == CYCLE_COUNT) cycle_pos = 0;
+  static unsigned int cycle_pos;
+  if (cycle_pos++ >= LONG_CYCLES) {
+    OCR0A = BASE;
+  } else {
+    OCR0A = BASE + 1;
+  }
+  if (cycle_pos == CYCLE_COUNT) cycle_pos = 0;
 #endif
 }
 
@@ -155,9 +155,9 @@ void __ATTR_NORETURN__ main() {
   TIMSK0 = _BV(OCIE0A); // OCR0A interrupt only.
 #endif
 #if (CYCLE_COUNT > 0)
-        OCR0A = BASE + 1; // long cycle
+  OCR0A = BASE + 1; // long cycle
 #else
-        OCR0A = BASE; // short cycle
+  OCR0A = BASE; // short cycle
 #endif
 
   reset_start = 0;
@@ -182,13 +182,13 @@ void __ATTR_NORETURN__ main() {
       // input is asserted
       // If we're in the holdoff period, ignore it
       if (reset_start != 0) {
-	// Prevent the holdoff period from expiring by dragging the start
-	// forward. When we do go high, we don't want to get stuck because
-	// of window arithmetic
-	if (now - reset_start >= RESET_HOLDOFF) {
-		reset_start = now - RESET_HOLDOFF; // slide forward
-		if (reset_start == 0) reset_start++; // it can't be zero.
-	}
+        // Prevent the holdoff period from expiring by dragging the start
+        // forward. When we do go high, we don't want to get stuck because
+        // of window arithmetic
+        if (now - reset_start >= RESET_HOLDOFF) {
+          reset_start = now - RESET_HOLDOFF; // slide forward
+          if (reset_start == 0) reset_start++; // it can't be zero.
+        }
         continue;
       }
       // Start the reset. First, begin the holdoff and the reset pulse
