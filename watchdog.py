@@ -34,7 +34,7 @@ syslog.openlog(facility=syslog.LOG_DAEMON)
 # a firmware update should take. Power-cycling the router while it's
 # writing firmware would probably be a disaster.
 #
-timeout = 30 # a half hour
+timeout = 25 # just shy of a half hour
 
 # define this as the GPIO pin you're using as the power-cycle signal.
 # This pin will go from high impedance to low for 2 seconds, and then
@@ -54,12 +54,10 @@ hosts = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "8.26.56.26", "8.20.247.20"
 random.seed()
 random.shuffle(hosts)
 
-FNULL = open(os.devnull)
-
 start = time.time()
 while True:
 	for host in hosts:
-		res = subprocess.call(["ping", "-c", "3", "-W", "5", host], stdout=FNULL, stderr=FNULL)
+		res = subprocess.run(["ping", "-c", "3", "-W", "5", host], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
 		if (res == 0):
 			syslog.syslog(syslog.LOG_DEBUG, host + " is up.")
 			sys.exit(0) # it worked. Bail
