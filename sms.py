@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import serial
 import csv
@@ -18,11 +18,11 @@ reset_pin = 4
 
 def doCommand(command):
 	ser.flushInput()
-	ser.write(command + "\r")
+	ser.write((command + "\r").encode())
 	ser.flush()
 	out = []
 	while True:
-		line = ser.readline().rstrip()
+		line = ser.readline().rstrip().decode()
 		if (line.startswith("ERROR")):
 			raise Exception("command returned error")
 		if (line.startswith("OK")):
@@ -35,14 +35,14 @@ def deleteSMS(record):
 
 def sendSMS(recipient, text):
 	ser.flushInput()
-	ser.write("AT+CMGS=\"" + recipient + "\"\r")
+	ser.write(("AT+CMGS=\"" + recipient + "\"\r").encode())
 	ser.flush()
-	ser.write(text + "\r")
+	ser.write((text + "\r").encode())
 	ser.flush()
-	ser.write("\x1a")
+	ser.write(("\x1a").encode())
 	ser.flush()
 	while True:
-		line = ser.readline().rstrip()
+		line = ser.readline().rstrip().decode()
 		if (line.startswith("ERROR")):	
 			raise Exception("Got error sending SMS")
 		if (line.startswith("OK")):
@@ -51,13 +51,13 @@ def sendSMS(recipient, text):
 def pollSMS():
 	result = doCommand("AT+CMGL=\"ALL\"")
 	out = []
-	for i in range(0, len(result)/2):
+	for i in range(0, int(len(result)/2)):
 		infoLine = result[2 * i]
 		textLine = result[2 * i + 1]
 		if (not infoLine.startswith("+CMGL:")):
 			raise Exception("Unexpected CMGL response line: " + infoLine)
 		infoLine = infoLine[7:]
-		infos = csv.reader([infoLine], delimiter=',', quotechar='"').next()
+		infos = next(csv.reader([infoLine], delimiter=',', quotechar='"'))
 		out.append({'id':int(infos[0]), 'status':infos[1], 'sender':infos[2], 'time':infos[4], 'text':textLine})
 	return out
 
