@@ -23,7 +23,6 @@ import RPi.GPIO as GPIO
 import sys
 import time
 import subprocess
-import os
 import random
 import syslog
 
